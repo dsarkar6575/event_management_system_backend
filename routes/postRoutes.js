@@ -9,6 +9,8 @@ router.post('/', protect, upload.array('mediaUrls', 5),postController.createPost
 
 router.get('/', protect, postController.getAllPosts);
 
+router.get('/feed', protect, postController.getFeedPosts);
+
 router.get('/:postId', protect, postController.getPostById);
 
 router.put('/:postId', protect, upload.array('mediaUrls', 5), postController.updatePost);

@@ -301,18 +301,16 @@ exports.joinInterestGroup = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Validate the postId first for a cleaner error message.
     if (!mongoose.Types.ObjectId.isValid(postId)) {
         return res.status(400).json({ msg: 'Invalid post ID format.' });
     }
 
-    // 2. Fetch the post and the chat simultaneously for efficiency.
+
     const [post, chat] = await Promise.all([
       Post.findById(postId),
       Chat.findOne({ postId })
     ]);
     
-    // 3. Handle non-existent or non-event posts.
     if (!post || !post.isEvent) {
       return res.status(404).json({ msg: 'Event post not found or is not an event.' });
     }
@@ -320,17 +318,13 @@ exports.joinInterestGroup = async (req, res) => {
     let updatedChat;
 
     if (chat) {
-      // 4. Check if the user is already a participant before pushing.
-      // Use toString() to compare ObjectId with a string ID correctly.
       if (!chat.participants.map(p => p.toString()).includes(userId.toString())) {
         chat.participants.push(userId);
         updatedChat = await chat.save();
       } else {
-        // User is already in the group, no need to save again.
         updatedChat = chat;
       }
     } else {
-      // 5. If no chat exists, create a new one.
       updatedChat = await Chat.create({
         postId,
         groupName: post.title,
@@ -339,19 +333,42 @@ exports.joinInterestGroup = async (req, res) => {
       });
     }
 
-    // 6. Ensure the user is also added to the post's interestedUsers list.
-    // This synchronizes the chat group with the post's interest count.
     if (!post.interestedUsers.map(u => u.toString()).includes(userId.toString())) {
         post.interestedUsers.push(userId);
         await post.save();
     }
 
-    // 7. Populate the participants for the response.
     await updatedChat.populate('participants', 'username profileImageUrl');
 
     res.status(200).json({ msg: 'Joined interest group', chat: updatedChat });
   } catch (err) {
     console.error('❌ joinInterestGroup error:', err.message);
     res.status(500).json({ msg: 'Server error' });
+  }
+};
+
+
+exports.getFeedPosts = async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user.id);
+
+    if (!currentUser) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    let query = {};
+
+    if (currentUser.following && currentUser.following.length > 0) {
+      query = { author: { $in: currentUser.following } };
+    }
+
+    const posts = await Post.find(query)
+      .sort({ createdAt: -1 })
+      .populate("author", "username profileImageUrl");
+
+    res.status(200).json(posts.map((p) => p.toObject({ getters: true })));
+  } catch (err) {
+    console.error("❌ Error fetching feed posts:", err.message);
+    res.status(500).json({ msg: "Server Error" });
   }
 };
