@@ -350,23 +350,36 @@ exports.joinInterestGroup = async (req, res) => {
 
 exports.getFeedPosts = async (req, res) => {
   try {
-    const currentUser = await User.findById(req.user.id);
+    const currentUser = await User.findById(req.user.id).populate("following", "_id following");
 
     if (!currentUser) {
       return res.status(404).json({ msg: "User not found" });
     }
 
-    let query = {};
+    const followingIds = currentUser.following.map(f => f._id);
 
-    if (currentUser.following && currentUser.following.length > 0) {
-      query = { author: { $in: currentUser.following } };
+    let secondLevelIds = [];
+    currentUser.following.forEach(user => {
+      if (user.following && user.following.length > 0) {
+        secondLevelIds.push(...user.following);
+      }
+    });
+
+    const allUserIds = [...new Set([...followingIds, ...secondLevelIds])];
+
+    let posts;
+
+    if (allUserIds.length === 0) {
+      posts = await Post.find({})
+        .sort({ createdAt: -1 })
+        .populate("author", "username profileImageUrl");
+    } else {
+      posts = await Post.find({ author: { $in: allUserIds } })
+        .sort({ createdAt: -1 })
+        .populate("author", "username profileImageUrl");
     }
 
-    const posts = await Post.find(query)
-      .sort({ createdAt: -1 })
-      .populate("author", "username profileImageUrl");
-
-    res.status(200).json(posts.map((p) => p.toObject({ getters: true })));
+    res.status(200).json(posts.map(p => p.toObject({ getters: true })));
   } catch (err) {
     console.error("❌ Error fetching feed posts:", err.message);
     res.status(500).json({ msg: "Server Error" });
