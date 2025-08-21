@@ -53,6 +53,12 @@ const UserSchema = new mongoose.Schema({
     isVerified: {
         type: Boolean,
         default: false
+    },
+
+     userType: {
+        type: String,
+        enum: ['personal', 'corporate'],
+        default: 'personal'
     }
 }, 
 {

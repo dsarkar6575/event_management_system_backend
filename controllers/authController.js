@@ -13,7 +13,6 @@ const generateToken = (userId) => {
 };
 
 
-// @route   POST api/auth/register
 exports.registerUser = async (req, res) => {
     const { email } = req.body;
 
@@ -40,6 +39,7 @@ exports.registerUser = async (req, res) => {
                 email,
                 otp,
                 otpExpires,
+                userType: 'personal' 
             });
             await user.save();
         }
@@ -64,12 +64,16 @@ exports.registerUser = async (req, res) => {
     }
 };
 
-// @route   POST api/auth/verify
-exports.verifyOtpAndRegister = async (req, res) => {
-    const { email, otp, username, password } = req.body;
 
-    if (!email || !otp || !username || !password) {
-        return res.status(400).json({ msg: 'Please provide email, OTP, username, and password' });
+exports.verifyOtpAndRegister = async (req, res) => {
+    const { email, otp, username, password, userType } = req.body;
+
+    if (!email || !otp || !username || !password || !userType) {
+        return res.status(400).json({ msg: 'Please provide email, OTP, username, password, and user type' });
+    }
+
+    if (!['personal', 'corporate'].includes(userType)) {
+        return res.status(400).json({ msg: 'Invalid user type. Must be personal or corporate.' });
     }
 
     try {
@@ -85,13 +89,16 @@ exports.verifyOtpAndRegister = async (req, res) => {
             await user.save();
             return res.status(400).json({ msg: 'Invalid or expired OTP.' });
         }
+
         const usernameExists = await User.findOne({ username });
         if (usernameExists) {
             return res.status(400).json({ msg: 'Username already taken.' });
         }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         user.username = username;
         user.password = hashedPassword;
+        user.userType = userType; 
         user.isVerified = true;
         user.otp = undefined; 
         user.otpExpires = undefined;
@@ -106,7 +113,7 @@ exports.verifyOtpAndRegister = async (req, res) => {
     }
 };
 
-// @route   POST api/auth/login
+
 exports.loginUser = async (req, res) => {
     const { email, password } = req.body;
     
@@ -142,7 +149,7 @@ exports.loginUser = async (req, res) => {
     }
 };
 
-// @route   GET api/auth
+
 exports.getAuthUser = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
