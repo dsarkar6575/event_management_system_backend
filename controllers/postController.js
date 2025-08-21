@@ -350,7 +350,7 @@ exports.joinInterestGroup = async (req, res) => {
 
 exports.getFeedPosts = async (req, res) => {
   try {
-    const currentUser = await User.findById(req.user.id).populate("following", "_id following");
+    const currentUser = await User.findById(req.user.id).populate("following", "_id following userType");
 
     if (!currentUser) {
       return res.status(404).json({ msg: "User not found" });
@@ -369,14 +369,29 @@ exports.getFeedPosts = async (req, res) => {
 
     let posts;
 
-    if (allUserIds.length === 0) {
+    if (allUserIds.length === 0 && currentUser.userType === "personal") {
       posts = await Post.find({})
         .sort({ createdAt: -1 })
-        .populate("author", "username profileImageUrl");
-    } else {
-      posts = await Post.find({ author: { $in: allUserIds } })
+        .populate("author", "username profileImageUrl userType");
+    } else if (currentUser.userType === "personal") {
+      posts = await Post.find({
+        $or: [
+          { author: { $in: allUserIds } }, 
+          { author: { $in: await getCorporateUserIds() } }
+        ]
+      })
         .sort({ createdAt: -1 })
-        .populate("author", "username profileImageUrl");
+        .populate("author", "username profileImageUrl userType");
+    } else {
+      if (allUserIds.length === 0) {
+        posts = await Post.find({})
+          .sort({ createdAt: -1 })
+          .populate("author", "username profileImageUrl userType");
+      } else {
+        posts = await Post.find({ author: { $in: allUserIds } })
+          .sort({ createdAt: -1 })
+          .populate("author", "username profileImageUrl userType");
+      }
     }
 
     res.status(200).json(posts.map(p => p.toObject({ getters: true })));
@@ -385,3 +400,9 @@ exports.getFeedPosts = async (req, res) => {
     res.status(500).json({ msg: "Server Error" });
   }
 };
+
+
+async function getCorporateUserIds() {
+  const corporateUsers = await User.find({ userType: "corporate" }, "_id");
+  return corporateUsers.map(user => user._id);
+}
